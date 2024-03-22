@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useQuery, gql } from "@apollo/client";
@@ -74,18 +74,53 @@ const LOGIN_QUERY = gql`
   }
 `;
 
+const ELECTRICITY_CONSUMPTION = gql`
+  query GetConsumption($token: TOKEN!, $from: FROM!, $to: TO!) {
+    user(token: $token, from: $from , to: $to) {
+      treeNode(id: 3) {
+        name
+        type
+        meters {
+          name
+          type
+          function
+          data(
+            from: $from
+            to: $to
+            interval: Month
+          ) {
+            timestamp
+            value
+          }
+        }
+      }
+    }
+  }
+`;
+
 function App() {
   const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
-  const { data, loading, error } = useQuery(LOGIN_QUERY);
-  console.log(data, loading)
-  var outputData = DATA.map(Object.values);
+  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const { data: loginData, loading: loginLoading, error: loginError } = useQuery(LOGIN_QUERY);
+
+  useEffect(() => {
+    if(loginError){
+      alert("Please recheck your username and password")
+    }
+  }, [loginError])
+  const { login = {} } = loginData;
+  const { token = "" } = login;
+  const { loading, error, data } = useQuery(ELECTRICITY_CONSUMPTION, {
+    variables: { token, from: fromDate, to: toDate  },
+  });
+  const outputData = DATA.map(Object.values);
   const chartData = [["Monthly", "Consumption"]];
   outputData.map((item) => {
     const date = item[0];
     const myMomentObject = moment(date, "YYYY-MM-DD");
-    console.log(myMomentObject.format('Do MMM YY'))
-    item[0] = myMomentObject.format('Do MMM YY').toLocaleString();
+    item[0] = myMomentObject.format("Do MMM YY").toLocaleString();
     chartData.push(item);
   });
 
@@ -100,6 +135,12 @@ function App() {
           placeholderText={"Select Date Range"}
           className={"dateTime"}
           onChange={(update) => {
+            let isNotNull = (value) => value != null;
+            let filteredArray = update.filter(isNotNull);
+            if(filteredArray.length === 2){
+              setFromDate(filteredArray[0].toDateString())
+              setToDate(filteredArray[1].toDateString())
+            }
             setDateRange(update);
           }}
           isClearable={true}
